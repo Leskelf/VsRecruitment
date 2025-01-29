@@ -19,54 +19,49 @@ public class DocumentService : IDocumentService
 
     public async Task<DocumentResponse> ReadFileAsync(IFormFile file, int filterAmount)
     {
-        try
+
+        using var stream = file.OpenReadStream();
+        using StreamReader reader = new(stream);
+        string line;
+
+        int totalChars = 0;
+        int itemsRowsCount = 0;
+        int itemsTotal = 0;
+
+        while ((line = await reader.ReadLineAsync()) != null)
         {
-            using var stream = file.OpenReadStream();
-            using StreamReader reader = new(stream);
-            string line;
+            totalChars += line.Length;
+            _totalLines++;
 
-            int totalChars = 0;
-            int itemsRowsCount = 0;
-            int itemsTotal = 0;
-
-            while ((line = await reader.ReadLineAsync()) != null)
+            switch (line[0])
             {
-                totalChars += line.Length;
-                _totalLines++;
+                case 'H':
+                    ProcessHeader(line, filterAmount);
+                    itemsRowsCount = 0;
+                    break;
 
-                switch (line[0])
-                {
-                    case 'H':
-                        ProcessHeader(line, filterAmount);
-                        itemsRowsCount = 0;
-                        break;
+                case 'B':
+                    ProcessItem(line);
+                    itemsTotal++;
+                    itemsRowsCount++;
+                    break;
 
-                    case 'B':
-                        ProcessItem(line);
-                        itemsTotal++;
-                        itemsRowsCount++;
-                        break;
-
-                    case 'C':
-                        ProcessComment(line);
-                        break;
-                }
+                case 'C':
+                    ProcessComment(line);
+                    break;
             }
+        }
 
-            return new DocumentResponse
-            {
-                Documents = _documents,
-                CharsCount = totalChars,
-                LinesCount = _totalLines,
-                Sum = itemsTotal,
-                XCount = _documents.Count(x => x.Items.Count > filterAmount),
-                ProductWithMaxNetValue = GetProductWithMaxNetValue()
-            };
-        }
-        catch (Exception ex)
+        return new DocumentResponse
         {
-            throw;
-        }
+            Documents = _documents,
+            CharsCount = totalChars,
+            LinesCount = _totalLines,
+            Sum = itemsTotal,
+            XCount = _documents.Count(x => x.Items.Count > filterAmount),
+            ProductWithMaxNetValue = GetProductWithMaxNetValue()
+        };
+
     }
 
     private void ProcessHeader(string line, int x)
@@ -80,7 +75,7 @@ public class DocumentService : IDocumentService
     {
         var item = _documentMapper.MapItem(line);
         _tempDocumentModel.Items.Add(item);
-        CheckIfProductWithMaxNetValue(item);        
+        CheckIfProductWithMaxNetValue(item);
     }
 
     private void ProcessComment(string line)
